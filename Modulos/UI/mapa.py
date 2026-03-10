@@ -25,9 +25,24 @@ def render_bike_icons(
     bicis_danadas=0,
     puertos_disponibles=0,
     puertos_danados=0,
-    max_icons=30
+    max_icons=10
 ):
     st.markdown("### Disponibilidad: CDMX")
+
+    def bike_svg(color):
+        return f"""
+        <svg width="22" height="22" viewBox="0 0 24 24"
+             xmlns="http://www.w3.org/2000/svg"
+             style="margin-right:4px; vertical-align:middle;">
+            <g fill="{color}">
+                <circle cx="5.5" cy="17" r="3.2"/>
+                <circle cx="18.5" cy="17" r="3.2"/>
+                <circle cx="12" cy="7" r="1.6"/>
+                <path d="M11 9.2h3l2.2 3.6h1.3v1.5h-2.1l-1.8-3h-1.9l-1.7 2.8H8.7l2.3-4.9z"/>
+                <path d="M8.9 14.1H14v1.4H8.9z"/>
+            </g>
+        </svg>
+        """
 
     categorias = [
         ("Bici disponible", bicis_disponibles, "#49A96E"),
@@ -40,21 +55,25 @@ def render_bike_icons(
         if cantidad is None:
             cantidad = 0
 
-        iconos_mostrar = min(int(cantidad), max_icons)
-        restante = int(cantidad) - iconos_mostrar
+        cantidad = int(cantidad)
+        iconos_mostrar = min(cantidad, max_icons)
+        restante = cantidad - iconos_mostrar
 
         bicicletas = ""
         for _ in range(iconos_mostrar):
-            bicicletas += f"<span style='color:{color}; font-size:20px; margin-right:4px;'>🚲</span>"
+            bicicletas += bike_svg(color)
 
         extra = ""
         if restante > 0:
-            extra = f"<span style='color:{color}; font-size:18px; font-weight:600; margin-left:8px;'>+ {restante}</span>"
+            extra = f"<span style='color:{color}; font-size:16px; font-weight:600; margin-left:8px;'>+ {restante}</span>"
 
         html = f"""
         <div style="margin-bottom:16px;">
             <div style="font-size:14px; margin-bottom:6px;"><b>{nombre}</b></div>
-            <div>{bicicletas}{extra}</div>
+            <div style="display:flex; flex-wrap:wrap; align-items:center;">
+                {bicicletas}
+                {extra}
+            </div>
         </div>
         """
 
@@ -76,7 +95,6 @@ def show_mapa_estaciones(df: pd.DataFrame):
     else:
         df["estado_estacion"] = "Sin clasificar"
 
-    # SIDEBAR
     st.sidebar.markdown("## Configuración de Visualización")
 
     estaciones = ["Todas"] + sorted(df["name"].unique().tolist())
@@ -224,7 +242,7 @@ def show_mapa_estaciones(df: pd.DataFrame):
             bicis_danadas=total_disabled,
             puertos_disponibles=total_docks,
             puertos_danados=total_docks_disabled,
-            max_icons=30
+            max_icons=10
         )
 
     if punto is not None:
