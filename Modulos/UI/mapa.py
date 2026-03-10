@@ -1,3 +1,4 @@
+import math
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
@@ -15,14 +16,52 @@ def clasificar_estacion(row):
     elif docks == 0:
         return "Sin puertos"
     elif bikes >= docks:
-        return "Bicis disponibles"
+        return "Alta disponibilidad"
     else:
         return "Puertos disponibles"
 
 
-def show_mapa_estaciones(df: pd.DataFrame):
-    st.subheader("Mapa de Estaciones Ecobici")
+def render_bike_icons(total_bikes, total_disabled=0, total_docks=0, scale=100):
+    st.markdown("### Disponibilidad: CDMX")
 
+    bicis_verdes = math.ceil(total_bikes / scale) if total_bikes > 0 else 0
+    bicis_rojas = math.ceil(total_disabled / scale) if total_disabled > 0 else 0
+    bicis_azules = math.ceil(total_docks / scale) if total_docks > 0 else 0
+
+    fila = []
+    fila += [("🚲", "#3CB371")] * bicis_verdes
+    fila += [("🚲", "#E74C3C")] * bicis_rojas
+    fila += [("🚲", "#5DADE2")] * bicis_azules
+
+    if not fila:
+        st.write("Sin datos de disponibilidad")
+        return
+
+    items_por_fila = 10
+    html = ""
+    for i in range(0, len(fila), items_por_fila):
+        bloque = fila[i:i + items_por_fila]
+        html += "<div style='line-height:1.8;'>"
+        for icono, color in bloque:
+            html += f"<span style='font-size:18px; color:{color}; margin-right:6px;'>{icono}</span>"
+        html += "</div>"
+
+    st.markdown(html, unsafe_allow_html=True)
+
+    leyenda = """
+    <div style="margin-top:10px; font-size:14px;">
+        <span style="color:#3CB371;">🚲</span> Bici disponible &nbsp;&nbsp;
+        <span style="color:#E74C3C;">🚲</span> Bici dañada &nbsp;&nbsp;
+        <span style="color:#5DADE2;">🚲</span> Puerto libre
+    </div>
+    <div style="margin-top:8px; color:gray; font-size:13px;">
+        Escala: 1 icono ≈ 100 unidades
+    </div>
+    """
+    st.markdown(leyenda, unsafe_allow_html=True)
+
+
+def show_mapa_estaciones(df: pd.DataFrame):
     columnas_necesarias = ["name", "lat", "lon", "station_id"]
     for col in columnas_necesarias:
         if col not in df.columns:
@@ -32,23 +71,32 @@ def show_mapa_estaciones(df: pd.DataFrame):
     df = df.copy()
     df = df.dropna(subset=["name", "lat", "lon", "station_id"])
 
-    # Crear estado visual
     if "num_bikes_available" in df.columns and "num_docks_available" in df.columns:
         df["estado_estacion"] = df.apply(clasificar_estacion, axis=1)
     else:
         df["estado_estacion"] = "Sin clasificar"
 
+    # SIDEBAR
+    st.sidebar.markdown("## Configuración de Visualización")
+
     estaciones = ["Todas"] + sorted(df["name"].unique().tolist())
-    seleccion = st.selectbox(
-        "Busca y selecciona una estación para resaltarla:",
+    seleccion = st.sidebar.selectbox(
+        "Selecciona una estación:",
         estaciones
     )
 
-    nivel_zoom = st.slider(
-        "Nivel de zoom",
+    nivel_zoom = st.sidebar.slider(
+        "Nivel de Zoom",
         min_value=1,
         max_value=4,
         value=1
+    )
+
+    tamanio_puntos = st.sidebar.slider(
+        "Tamaño de puntos en mapa",
+        min_value=8,
+        max_value=24,
+        value=14
     )
 
     zoom_map = {
@@ -77,14 +125,13 @@ def show_mapa_estaciones(df: pd.DataFrame):
         zoom_val = zoom_map[1]
 
     color_map = {
-        "Bicis disponibles": "#2E8B57",
-        "Puertos disponibles": "#1F77B4",
-        "Sin bicicletas": "#D62728",
-        "Sin puertos": "#F4A300",
+        "Alta disponibilidad": "#5DBB63",
+        "Puertos disponibles": "#5DADE2",
+        "Sin bicicletas": "#E74C3C",
+        "Sin puertos": "#F5B041",
         "Sin clasificar": "#BDBDBD"
     }
 
-    # Texto hover manual para que sí salga todo
     df["hover_texto"] = (
         "<b>" + df["name"].astype(str) + "</b><br>" +
         "ID: " + df["station_id"].astype(str) + "<br>" +
@@ -94,95 +141,101 @@ def show_mapa_estaciones(df: pd.DataFrame):
         ("Puertos disponibles: " + df["num_docks_available"].astype(str) if "num_docks_available" in df.columns else "")
     )
 
-    fig = px.scatter_mapbox(
-        df,
-        lat="lat",
-        lon="lon",
-        color="estado_estacion",
-        color_discrete_map=color_map,
-        zoom=zoom_val,
-        center={"lat": lat_center, "lon": lon_center},
-        height=650
-    )
+    col1, col2 = st.columns([3, 1.2])
 
-    fig.update_traces(
-        marker=dict(size=13, opacity=0.70),
-        hovertemplate="%{customdata[0]}<extra></extra>",
-        customdata=df[["hover_texto"]].values
-    )
+    with col1:
+        st.markdown("## Ubicación de Estaciones")
 
-    if punto is not None:
-        fig.add_trace(
-            go.Scattermapbox(
-                lat=[punto["lat"]],
-                lon=[punto["lon"]],
-                mode="markers",
-                marker=go.scattermapbox.Marker(
-                    size=30,
-                    color="white",
-                    opacity=0.95
-                ),
-                hoverinfo="skip",
-                showlegend=False
+        fig = px.scatter_mapbox(
+            df,
+            lat="lat",
+            lon="lon",
+            color="estado_estacion",
+            color_discrete_map=color_map,
+            zoom=zoom_val,
+            center={"lat": lat_center, "lon": lon_center},
+            height=800
+        )
+
+        fig.update_traces(
+            marker=dict(size=tamanio_puntos, opacity=0.58),
+            hovertemplate="%{customdata[0]}<extra></extra>",
+            customdata=df[["hover_texto"]].values
+        )
+
+        if punto is not None:
+            fig.add_trace(
+                go.Scattermapbox(
+                    lat=[punto["lat"]],
+                    lon=[punto["lon"]],
+                    mode="markers",
+                    marker=go.scattermapbox.Marker(
+                        size=tamanio_puntos + 14,
+                        color="white",
+                        opacity=0.95
+                    ),
+                    hoverinfo="skip",
+                    showlegend=False
+                )
+            )
+
+            fig.add_trace(
+                go.Scattermapbox(
+                    lat=[punto["lat"]],
+                    lon=[punto["lon"]],
+                    mode="markers",
+                    marker=go.scattermapbox.Marker(
+                        size=tamanio_puntos + 4,
+                        color="#2E4053",
+                        opacity=1.0
+                    ),
+                    text=[punto["name"]],
+                    customdata=[[punto["station_id"]]],
+                    hovertemplate="<b>%{text}</b><br>ID: %{customdata[0]}<extra></extra>",
+                    name="Estación seleccionada",
+                    showlegend=True
+                )
+            )
+
+        fig.update_layout(
+            mapbox_style="carto-positron",
+            margin={"r": 0, "t": 0, "l": 0, "b": 0},
+            showlegend=True,
+            legend_title_text="Estado de la estación",
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=0.01,
+                xanchor="center",
+                x=0.5
             )
         )
 
-        hover_punto = (
-            f"<b>{punto['name']}</b><br>"
-            f"ID: {punto['station_id']}<br>"
-            f"Estado: {punto['estado_estacion']}<br>"
-            f"Capacidad: {punto['capacity']}<br>" if "capacity" in punto.index else
-            f"<b>{punto['name']}</b><br>ID: {punto['station_id']}<br>Estado: {punto['estado_estacion']}<br>"
+        st.plotly_chart(fig, use_container_width=True)
+
+    with col2:
+        total_bikes = int(df["num_bikes_available"].sum()) if "num_bikes_available" in df.columns else 0
+        total_disabled = int(df["num_bikes_disabled"].sum()) if "num_bikes_disabled" in df.columns else 0
+        total_docks = int(df["num_docks_available"].sum()) if "num_docks_available" in df.columns else 0
+
+        render_bike_icons(
+            total_bikes=total_bikes,
+            total_disabled=total_disabled,
+            total_docks=total_docks,
+            scale=100
         )
-
-        if "num_bikes_available" in punto.index:
-            hover_punto += f"Bicis disponibles: {punto['num_bikes_available']}<br>"
-        if "num_docks_available" in punto.index:
-            hover_punto += f"Puertos disponibles: {punto['num_docks_available']}"
-
-        fig.add_trace(
-            go.Scattermapbox(
-                lat=[punto["lat"]],
-                lon=[punto["lon"]],
-                mode="markers",
-                marker=go.scattermapbox.Marker(
-                    size=20,
-                    color="#5C4033",
-                    opacity=1.0
-                ),
-                hovertemplate=hover_punto + "<extra></extra>",
-                name="Estación seleccionada",
-                showlegend=True
-            )
-        )
-
-    fig.update_layout(
-        mapbox_style="carto-positron",
-        margin={"r": 0, "t": 0, "l": 0, "b": 0},
-        showlegend=True,
-        legend_title_text="Estado de la estación",
-        legend=dict(
-            orientation="v",
-            yanchor="top",
-            y=1,
-            xanchor="left",
-            x=0.01
-        )
-    )
-
-    st.plotly_chart(fig, use_container_width=True)
 
     if punto is not None:
         st.markdown("### Información de la estación seleccionada")
-        col1, col2 = st.columns(2)
+        a, b = st.columns(2)
 
-        with col1:
+        with a:
             st.write(f"**ID:** {punto['station_id']}")
             st.write(f"**Nombre:** {punto['name']}")
             if "capacity" in punto.index:
                 st.write(f"**Capacidad:** {punto['capacity']}")
 
-        with col2:
+        with b:
             st.write(f"**Latitud:** {punto['lat']}")
             st.write(f"**Longitud:** {punto['lon']}")
             if "num_bikes_available" in punto.index:
