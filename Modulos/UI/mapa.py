@@ -1,111 +1,151 @@
-import streamlit as st
+import plotly.express as px
 import plotly.graph_objects as go
-import pandas as pd
+import streamlit as st
 
 
-def show_mapa_estaciones(df: pd.DataFrame):
-    st.subheader("Mapa de estaciones Ecobici en CDMX")
-    st.caption("Versión con slider")
+class EcobiciViz:
+    def render_map(self, df):
+        st.subheader("Mapa de Estaciones Ecobici")
 
-    columnas_necesarias = ["station_id", "name", "lat", "lon"]
-    for col in columnas_necesarias:
-        if col not in df.columns:
-            st.error(f"Falta la columna: {col}")
-            return
+        # Validación básica
+        columnas_necesarias = ["name", "lat", "lon", "station_id"]
+        for col in columnas_necesarias:
+            if col not in df.columns:
+                st.error(f"Falta la columna: {col}")
+                return
 
-    df_mapa = df.copy().dropna(subset=["station_id", "name", "lat", "lon"])
-    df_mapa["opcion"] = df_mapa["station_id"].astype(str) + " - " + df_mapa["name"]
+        # Copia para no modificar el dataframe original
+        df = df.copy()
 
-    opciones = ["Ninguna"] + sorted(df_mapa["opcion"].unique().tolist())
+        # Eliminar nulos por seguridad
+        df = df.dropna(subset=["name", "lat", "lon", "station_id"])
 
-    estacion_seleccionada = st.selectbox(
-        "Selecciona una estación",
-        options=opciones,
-        index=0
-    )
-
-    nivel_zoom = st.slider("Acercamiento del mapa", 1, 4, 1)
-
-    zoom_map = {
-        1: 10.3,
-        2: 12.0,
-        3: 13.5,
-        4: 15.0
-    }
-
-    centroide_lat = df_mapa["lat"].mean()
-    centroide_lon = df_mapa["lon"].mean()
-
-    estacion_info = None
-
-    if estacion_seleccionada == "Ninguna":
-        centro_lat = centroide_lat
-        centro_lon = centroide_lon
-        zoom_actual = zoom_map[1]
-    else:
-        estacion_info = df_mapa[df_mapa["opcion"] == estacion_seleccionada].iloc[0]
-
-        if nivel_zoom == 1:
-            centro_lat = centroide_lat
-            centro_lon = centroide_lon
-        else:
-            centro_lat = estacion_info["lat"]
-            centro_lon = estacion_info["lon"]
-
-        zoom_actual = zoom_map[nivel_zoom]
-
-    fig = go.Figure()
-
-    fig.add_trace(
-        go.Scattermapbox(
-            lat=df_mapa["lat"],
-            lon=df_mapa["lon"],
-            mode="markers",
-            marker=go.scattermapbox.Marker(
-                size=9,
-                color="#CBB89D",
-                opacity=0.45
-            ),
-            text=df_mapa["name"],
-            customdata=df_mapa[["station_id"]],
-            hovertemplate="<b>%{text}</b><br>ID: %{customdata[0]}<extra></extra>",
-            name="Otras estaciones"
+        # 1. Lista desplegable para resaltar estación
+        estaciones = ["Todas"] + sorted(df["name"].unique().tolist())
+        seleccion = st.selectbox(
+            "Busca y selecciona una estación para resaltarla:",
+            estaciones
         )
-    )
 
-    if estacion_info is not None:
-        fig.add_trace(
-            go.Scattermapbox(
-                lat=[estacion_info["lat"]],
-                lon=[estacion_info["lon"]],
-                mode="markers",
-                marker=go.scattermapbox.Marker(
-                    size=24,
-                    color="#9C5B2E",
-                    opacity=1.0
-                ),
-                text=[estacion_info["name"]],
-                customdata=[[estacion_info["station_id"]]],
-                hovertemplate="<b>%{text}</b><br>ID: %{customdata[0]}<extra></extra>",
-                name="Estación seleccionada"
+        # 2. Slider de zoom
+        nivel_zoom = st.slider(
+            "Nivel de zoom",
+            min_value=1,
+            max_value=4,
+            value=1
+        )
+
+        # Mapeo de niveles
+        zoom_map = {
+            1: 10.3,
+            2: 12.0,
+            3: 13.5,
+            4: 15.0
+        }
+
+        # 3. Centroide de todas las estaciones
+        lat_centroide = df["lat"].mean()
+        lon_centroide = df["lon"].mean()
+
+        # 4. Configuración dinámica según selección
+        punto = None
+
+        if seleccion != "Todas":
+            df["resaltado"] = df["name"].apply(
+                lambda x: "Seleccionada" if x == seleccion else "Normal"
+            )
+
+            color_map = {
+                "Seleccionada": "#A06A42",
+                "Normal": "#CFC3B3"
+            }
+
+            punto = df[df["name"] == seleccion].iloc[0]
+
+            # Nivel 1 = no acercar a la estación
+            if nivel_zoom == 1:
+                lat_center, lon_center = lat_centroide, lon_centroide
+            else:
+                lat_center, lon_center = punto["lat"], punto["lon"]
+
+            zoom_val = zoom_map[nivel_zoom]
+
+        else:
+            df["resaltado"] = "Normal"
+            color_map = {"Normal": "#CFC3B3"}
+            lat_center, lon_center = lat_centroide, lon_centroide
+            zoom_val = zoom_map[1]
+
+        # 5. Mapa base
+        fig = px.scatter_mapbox(
+            df,
+            lat="lat",
+            lon="lon",
+            hover_name="name",
+            hover_data={
+                "lat": False,
+                "lon": False,
+                "station_id": True,
+                "capacity": True if "capacity" in df.columns else False,
+                "num_bikes_available": True if "num_bikes_available" in df.columns else False
+            },
+            color="resaltado",
+            color_discrete_map=color_map,
+            zoom=zoom_val,
+            center={"lat": lat_center, "lon": lon_center},
+            height=650
+        )
+
+        # Hacer más grandes y más suaves los círculos
+        fig.update_traces(
+            marker=dict(
+                size=11,
+                opacity=0.55
             )
         )
 
-    fig.update_layout(
-        mapbox=dict(
-            style="carto-positron",
-            center={"lat": centro_lat, "lon": centro_lon},
-            zoom=zoom_actual
-        ),
-        margin={"r": 0, "t": 0, "l": 0, "b": 0},
-        height=650
-    )
+        # 6. Agregar marcador extra para la estación seleccionada
+        if punto is not None:
+            # halo exterior
+            fig.add_trace(
+                go.Scattermapbox(
+                    lat=[punto["lat"]],
+                    lon=[punto["lon"]],
+                    mode="markers",
+                    marker=go.scattermapbox.Marker(
+                        size=28,
+                        color="white",
+                        opacity=0.95
+                    ),
+                    hoverinfo="skip",
+                    showlegend=False
+                )
+            )
 
-    st.plotly_chart(fig, use_container_width=True)
+            # punto principal encima
+            fig.add_trace(
+                go.Scattermapbox(
+                    lat=[punto["lat"]],
+                    lon=[punto["lon"]],
+                    mode="markers",
+                    marker=go.scattermapbox.Marker(
+                        size=18,
+                        color="#8B5E3C",
+                        opacity=1.0
+                    ),
+                    text=[punto["name"]],
+                    customdata=[[punto["station_id"]]],
+                    hovertemplate="<b>%{text}</b><br>ID: %{customdata[0]}<extra></extra>",
+                    name="Estación seleccionada",
+                    showlegend=False
+                )
+            )
 
-    if estacion_info is not None:
-        st.markdown("### Información de la estación seleccionada")
-        st.write(f"**ID:** {estacion_info['station_id']}")
-        st.write(f"**Nombre:** {estacion_info['name']}")
-        st.write(f"**Latitud:** {estacion_info['lat']}")
-        st.write(f"**Longitud:** {estacion_info['lon']}")
+        # 7. Estilo visual del mapa
+        fig.update_layout(
+            mapbox_style="carto-positron",
+            margin={"r": 0, "t": 0, "l": 0, "b": 0},
+            showlegend=False
+        )
+
+        st.plotly_chart(fig, use_container_width=True)
