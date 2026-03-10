@@ -4,5 +4,11 @@ from Modulos.UI.mapa import show_mapa_estaciones
 
 show_header("Mi primera GUI en Streamlit")
 
+st.set_page_config(
+    page_title="Análisis de Movilidad: Ecobici CDMX",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
 df = cargar_estaciones()
 show_mapa_estaciones(df)
