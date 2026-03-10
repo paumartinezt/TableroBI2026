@@ -1,6 +1,8 @@
 # Aquí colocaremos todas las bibliotecas que se necesitan instalar
+streamlit
 pandas
-numpy
-matplotlib
-seaborn
 plotly
+requests
+matplotlib
+pywaffle
+fontawesomefree
