@@ -22,6 +22,47 @@ def clasificar_estacion(row):
         return "Puertos disponibles"
 
 
+def show_metric_card(label, value):
+    st.markdown(
+        f"""
+        <div style="
+            background-color:#f7f7f9;
+            padding:16px 18px;
+            border-radius:14px;
+            border:1px solid #ececf2;
+            margin-bottom:8px;
+        ">
+            <div style="font-size:13px; color:#6b7280; margin-bottom:6px;">{label}</div>
+            <div style="font-size:28px; font-weight:700; color:#22223b;">{value}</div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+
+def show_info_card(title, items):
+    html = f"""
+    <div style="
+        background-color:#ffffff;
+        padding:18px;
+        border-radius:14px;
+        border:1px solid #ececf2;
+        margin-top:10px;
+        margin-bottom:10px;
+    ">
+        <div style="font-size:18px; font-weight:700; color:#22223b; margin-bottom:12px;">{title}</div>
+    """
+    for k, v in items:
+        html += f"""
+        <div style="margin-bottom:8px;">
+            <span style="color:#6b7280; font-size:13px;">{k}</span><br>
+            <span style="color:#22223b; font-size:15px; font-weight:600;">{v}</span>
+        </div>
+        """
+    html += "</div>"
+    st.markdown(html, unsafe_allow_html=True)
+
+
 def show_mapa_estaciones(df: pd.DataFrame):
     columnas_necesarias = ["name", "lat", "lon", "station_id"]
     for col in columnas_necesarias:
@@ -32,12 +73,22 @@ def show_mapa_estaciones(df: pd.DataFrame):
     df = df.copy()
     df = df.dropna(subset=["name", "lat", "lon", "station_id"])
 
-    if "num_bikes_available" in df.columns and "num_docks_available" in df.columns:
-        df["estado_estacion"] = df.apply(clasificar_estacion, axis=1)
-    else:
-        df["estado_estacion"] = "Sin clasificar"
+    columnas_status = [
+        "num_bikes_available",
+        "num_bikes_disabled",
+        "num_docks_available",
+        "num_docks_disabled"
+    ]
+    for col in columnas_status:
+        if col not in df.columns:
+            df[col] = 0
 
-    st.sidebar.markdown("### Configuración de Visualización")
+    df["estado_estacion"] = df.apply(clasificar_estacion, axis=1)
+
+    # =========================
+    # SIDEBAR
+    # =========================
+    st.sidebar.markdown("## Configuración de Visualización")
 
     estaciones = ["Todas"] + sorted(df["name"].unique().tolist())
     seleccion = st.sidebar.selectbox("Selecciona una estación:", estaciones)
@@ -52,21 +103,25 @@ def show_mapa_estaciones(df: pd.DataFrame):
 
     tamanio_puntos = st.sidebar.slider("Tamaño de puntos en mapa", 10, 40, 18)
 
-    columnas_status = [
-        "num_bikes_available",
-        "num_bikes_disabled",
-        "num_docks_available",
-        "num_docks_disabled"
-    ]
+    estados_disponibles = sorted(df["estado_estacion"].unique().tolist())
+    filtro_estados = st.sidebar.multiselect(
+        "Filtrar por estado:",
+        options=estados_disponibles,
+        default=estados_disponibles
+    )
 
-    for col in columnas_status:
-        if col not in df.columns:
-            df[col] = 0
+    df = df[df["estado_estacion"].isin(filtro_estados)].copy()
+
+    if df.empty:
+        st.warning("No hay datos disponibles con los filtros seleccionados.")
+        return
 
     lat_centroide = df["lat"].mean()
     lon_centroide = df["lon"].mean()
 
-    if seleccion != "Todas":
+    fila = None
+
+    if seleccion != "Todas" and seleccion in df["name"].values:
         fila = df[df["name"] == seleccion].iloc[0]
         valores_waffle = fila[columnas_status].fillna(0).astype(int).values
 
@@ -76,13 +131,12 @@ def show_mapa_estaciones(df: pd.DataFrame):
             lat_center, lon_center = fila["lat"], fila["lon"]
 
         n_rows_waffle = 6
-        font_waffle = 22
+        font_waffle = 20
         leyenda_escala = "1 icono = 1 unidad"
 
         df["resaltado"] = df["name"].apply(
             lambda x: "Seleccionada" if x == seleccion else "Normal"
         )
-
     else:
         factor_escala = 100
         valores_reales = df[columnas_status].sum().fillna(0).values
@@ -94,8 +148,43 @@ def show_mapa_estaciones(df: pd.DataFrame):
         leyenda_escala = f"1 icono ≈ {factor_escala} unidades"
 
         df["resaltado"] = "Normal"
+        seleccion = "Todas"
 
-    col_mapa, col_waffle = st.columns([2.5, 1], gap="medium")
+    # =========================
+    # KPIs
+    # =========================
+    total_estaciones = df["station_id"].nunique()
+    total_bikes = int(df["num_bikes_available"].sum())
+    total_docks = int(df["num_docks_available"].sum())
+    estaciones_sin_bicis = int((df["num_bikes_available"] == 0).sum())
+
+    k1, k2, k3, k4 = st.columns(4)
+    with k1:
+        show_metric_card("Estaciones visibles", total_estaciones)
+    with k2:
+        show_metric_card("Bicis disponibles", total_bikes)
+    with k3:
+        show_metric_card("Puertos disponibles", total_docks)
+    with k4:
+        show_metric_card("Estaciones sin bicis", estaciones_sin_bicis)
+
+    # =========================
+    # HOVER
+    # =========================
+    df["hover_texto"] = (
+        "<b>" + df["name"].astype(str) + "</b><br>"
+        + "ID: " + df["station_id"].astype(str) + "<br>"
+        + "Estado: " + df["estado_estacion"].astype(str) + "<br>"
+        + "Bicis disponibles: " + df["num_bikes_available"].astype(str) + "<br>"
+        + "Bicis dañadas: " + df["num_bikes_disabled"].astype(str) + "<br>"
+        + "Puertos disponibles: " + df["num_docks_available"].astype(str) + "<br>"
+        + "Puertos dañados: " + df["num_docks_disabled"].astype(str)
+    )
+
+    # =========================
+    # LAYOUT PRINCIPAL
+    # =========================
+    col_mapa, col_waffle = st.columns([2.4, 1], gap="large")
 
     with col_mapa:
         st.markdown("## Ubicación de Estaciones")
@@ -104,29 +193,25 @@ def show_mapa_estaciones(df: pd.DataFrame):
             df,
             lat="lat",
             lon="lon",
-            size=[tamanio_puntos] * len(df),
-            size_max=tamanio_puntos,
             color="resaltado",
             color_discrete_map={
-                "Seleccionada": "#E74C3C",
-                "Normal": "#1f77b4"
+                "Seleccionada": "#e63946",
+                "Normal": "#3b82f6"
             },
             hover_name="name",
-            hover_data={
-                "station_id": True,
-                "lat": False,
-                "lon": False,
-                "num_bikes_available": True,
-                "num_docks_available": True,
-                "resaltado": False
-            },
             zoom=zoom_map_dict[nivel_slider],
             center={"lat": lat_center, "lon": lon_center},
             mapbox_style="carto-positron",
-            height=650
+            height=680
         )
 
-        if seleccion != "Todas":
+        fig_map.update_traces(
+            marker=dict(size=tamanio_puntos, opacity=0.58),
+            hovertemplate="%{customdata[0]}<extra></extra>",
+            customdata=df[["hover_texto"]].values
+        )
+
+        if seleccion != "Todas" and fila is not None:
             fig_map.add_trace(
                 go.Scattermapbox(
                     lat=[fila["lat"]],
@@ -134,7 +219,7 @@ def show_mapa_estaciones(df: pd.DataFrame):
                     mode="markers",
                     marker=go.scattermapbox.Marker(
                         size=tamanio_puntos + 15,
-                        color="red",
+                        color="#e63946",
                         symbol="marker"
                     ),
                     showlegend=False,
@@ -177,27 +262,39 @@ def show_mapa_estaciones(df: pd.DataFrame):
                 }
             )
 
-            plt.subplots_adjust(left=0.08, right=0.92, top=0.95, bottom=0.18)
-
+            plt.subplots_adjust(left=0.08, right=0.92, top=0.95, bottom=0.20)
             st.pyplot(fig_waffle, use_container_width=True, clear_figure=True)
             st.caption(f"**Escala:** {leyenda_escala}")
         else:
             st.info("No hay datos suficientes para generar el gráfico de disponibilidad.")
 
-    if seleccion != "Todas":
-        st.markdown("### Información de la estación seleccionada")
-        a, b = st.columns(2)
+    # =========================
+    # INFORMACIÓN DE ESTACIÓN
+    # =========================
+    if seleccion != "Todas" and fila is not None:
+        st.markdown("## Información de la estación seleccionada")
 
-        with a:
-            st.write(f"**ID:** {fila['station_id']}")
-            st.write(f"**Nombre:** {fila['name']}")
-            if "capacity" in fila.index:
-                st.write(f"**Capacidad:** {fila['capacity']}")
+        c1, c2 = st.columns(2)
 
-        with b:
-            st.write(f"**Latitud:** {fila['lat']}")
-            st.write(f"**Longitud:** {fila['lon']}")
-            st.write(f"**Bicis disponibles:** {fila['num_bikes_available']}")
-            st.write(f"**Bicis dañadas:** {fila['num_bikes_disabled']}")
-            st.write(f"**Puertos disponibles:** {fila['num_docks_available']}")
-            st.write(f"**Puertos dañados:** {fila['num_docks_disabled']}")
+        with c1:
+            show_info_card(
+                "Datos generales",
+                [
+                    ("ID", fila["station_id"]),
+                    ("Nombre", fila["name"]),
+                    ("Capacidad", fila["capacity"] if "capacity" in fila.index else "N/D"),
+                ]
+            )
+
+        with c2:
+            show_info_card(
+                "Estado operativo",
+                [
+                    ("Latitud", fila["lat"]),
+                    ("Longitud", fila["lon"]),
+                    ("Bicis disponibles", fila["num_bikes_available"]),
+                    ("Bicis dañadas", fila["num_bikes_disabled"]),
+                    ("Puertos disponibles", fila["num_docks_available"]),
+                    ("Puertos dañados", fila["num_docks_disabled"]),
+                ]
+            )
