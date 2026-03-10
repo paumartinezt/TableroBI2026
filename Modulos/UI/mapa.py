@@ -1,4 +1,3 @@
-import math
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
@@ -21,44 +20,45 @@ def clasificar_estacion(row):
         return "Puertos disponibles"
 
 
-def render_bike_icons(total_bikes, total_disabled=0, total_docks=0, scale=100):
+def render_bike_icons(
+    bicis_disponibles,
+    bicis_danadas=0,
+    puertos_disponibles=0,
+    puertos_danados=0,
+    max_icons=30
+):
     st.markdown("### Disponibilidad: CDMX")
 
-    bicis_verdes = math.ceil(total_bikes / scale) if total_bikes > 0 else 0
-    bicis_rojas = math.ceil(total_disabled / scale) if total_disabled > 0 else 0
-    bicis_azules = math.ceil(total_docks / scale) if total_docks > 0 else 0
+    categorias = [
+        ("Bici disponible", bicis_disponibles, "#49A96E"),
+        ("Bici dañada", bicis_danadas, "#E45757"),
+        ("Puerto disponible", puertos_disponibles, "#4A90E2"),
+        ("Puerto dañado", puertos_danados, "#F5A623"),
+    ]
 
-    fila = []
-    fila += [("🚲", "#3CB371")] * bicis_verdes
-    fila += [("🚲", "#E74C3C")] * bicis_rojas
-    fila += [("🚲", "#5DADE2")] * bicis_azules
+    for nombre, cantidad, color in categorias:
+        if cantidad is None:
+            cantidad = 0
 
-    if not fila:
-        st.write("Sin datos de disponibilidad")
-        return
+        iconos_mostrar = min(int(cantidad), max_icons)
+        restante = int(cantidad) - iconos_mostrar
 
-    items_por_fila = 10
-    html = ""
-    for i in range(0, len(fila), items_por_fila):
-        bloque = fila[i:i + items_por_fila]
-        html += "<div style='line-height:1.8;'>"
-        for icono, color in bloque:
-            html += f"<span style='font-size:18px; color:{color}; margin-right:6px;'>{icono}</span>"
-        html += "</div>"
+        bicicletas = ""
+        for _ in range(iconos_mostrar):
+            bicicletas += f"<span style='color:{color}; font-size:20px; margin-right:4px;'>🚲</span>"
 
-    st.markdown(html, unsafe_allow_html=True)
+        extra = ""
+        if restante > 0:
+            extra = f"<span style='color:{color}; font-size:18px; font-weight:600; margin-left:8px;'>+ {restante}</span>"
 
-    leyenda = """
-    <div style="margin-top:10px; font-size:14px;">
-        <span style="color:#3CB371;">🚲</span> Bici disponible &nbsp;&nbsp;
-        <span style="color:#E74C3C;">🚲</span> Bici dañada &nbsp;&nbsp;
-        <span style="color:#5DADE2;">🚲</span> Puerto libre
-    </div>
-    <div style="margin-top:8px; color:gray; font-size:13px;">
-        Escala: 1 icono ≈ 100 unidades
-    </div>
-    """
-    st.markdown(leyenda, unsafe_allow_html=True)
+        html = f"""
+        <div style="margin-bottom:16px;">
+            <div style="font-size:14px; margin-bottom:6px;"><b>{nombre}</b></div>
+            <div>{bicicletas}{extra}</div>
+        </div>
+        """
+
+        st.markdown(html, unsafe_allow_html=True)
 
 
 def show_mapa_estaciones(df: pd.DataFrame):
@@ -217,12 +217,14 @@ def show_mapa_estaciones(df: pd.DataFrame):
         total_bikes = int(df["num_bikes_available"].sum()) if "num_bikes_available" in df.columns else 0
         total_disabled = int(df["num_bikes_disabled"].sum()) if "num_bikes_disabled" in df.columns else 0
         total_docks = int(df["num_docks_available"].sum()) if "num_docks_available" in df.columns else 0
+        total_docks_disabled = int(df["num_docks_disabled"].sum()) if "num_docks_disabled" in df.columns else 0
 
         render_bike_icons(
-            total_bikes=total_bikes,
-            total_disabled=total_disabled,
-            total_docks=total_docks,
-            scale=100
+            bicis_disponibles=total_bikes,
+            bicis_danadas=total_disabled,
+            puertos_disponibles=total_docks,
+            puertos_danados=total_docks_disabled,
+            max_icons=30
         )
 
     if punto is not None:
