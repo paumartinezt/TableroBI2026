@@ -85,9 +85,6 @@ def show_mapa_estaciones(df: pd.DataFrame):
 
     df["estado_estacion"] = df.apply(clasificar_estacion, axis=1)
 
-    # =========================
-    # SIDEBAR
-    # =========================
     st.sidebar.markdown("## Configuración de Visualización")
 
     estaciones = ["Todas"] + sorted(df["name"].unique().tolist())
@@ -110,25 +107,36 @@ def show_mapa_estaciones(df: pd.DataFrame):
         default=estados_disponibles
     )
 
-    df = df[df["estado_estacion"].isin(filtro_estados)].copy()
+    # Guardar original
+    df_original = df.copy()
+
+    # Buscar la estación seleccionada en el original
+    fila = None
+    if seleccion != "Todas" and seleccion in df_original["name"].values:
+        fila = df_original[df_original["name"] == seleccion].iloc[0]
+
+    # Aplicar filtro visual
+    df = df_original[df_original["estado_estacion"].isin(filtro_estados)].copy()
+
+    # Si hay estación seleccionada y quedó fuera del filtro, volverla a agregar para que se resalte
+    if fila is not None and fila["name"] not in df["name"].values:
+        df = pd.concat([df, fila.to_frame().T], ignore_index=True)
+        st.info("La estación seleccionada quedó fuera del filtro de estado, pero se mantiene visible como referencia.")
 
     if df.empty:
         st.warning("No hay datos disponibles con los filtros seleccionados.")
         return
 
-    lat_centroide = df["lat"].mean()
-    lon_centroide = df["lon"].mean()
+    lat_centroide = df["lat"].astype(float).mean()
+    lon_centroide = df["lon"].astype(float).mean()
 
-    fila = None
-
-    if seleccion != "Todas" and seleccion in df["name"].values:
-        fila = df[df["name"] == seleccion].iloc[0]
+    if seleccion != "Todas" and fila is not None:
         valores_waffle = fila[columnas_status].fillna(0).astype(int).values
 
         if nivel_slider == 1:
             lat_center, lon_center = lat_centroide, lon_centroide
         else:
-            lat_center, lon_center = fila["lat"], fila["lon"]
+            lat_center, lon_center = float(fila["lat"]), float(fila["lon"])
 
         n_rows_waffle = 6
         font_waffle = 20
@@ -150,9 +158,6 @@ def show_mapa_estaciones(df: pd.DataFrame):
         df["resaltado"] = "Normal"
         seleccion = "Todas"
 
-    # =========================
-    # KPIs
-    # =========================
     total_estaciones = df["station_id"].nunique()
     total_bikes = int(df["num_bikes_available"].sum())
     total_docks = int(df["num_docks_available"].sum())
@@ -168,9 +173,6 @@ def show_mapa_estaciones(df: pd.DataFrame):
     with k4:
         show_metric_card("Estaciones sin bicis", estaciones_sin_bicis)
 
-    # =========================
-    # HOVER
-    # =========================
     df["hover_texto"] = (
         "<b>" + df["name"].astype(str) + "</b><br>"
         + "ID: " + df["station_id"].astype(str) + "<br>"
@@ -181,9 +183,6 @@ def show_mapa_estaciones(df: pd.DataFrame):
         + "Puertos dañados: " + df["num_docks_disabled"].astype(str)
     )
 
-    # =========================
-    # LAYOUT PRINCIPAL
-    # =========================
     col_mapa, col_waffle = st.columns([2.4, 1], gap="large")
 
     with col_mapa:
@@ -214,8 +213,8 @@ def show_mapa_estaciones(df: pd.DataFrame):
         if seleccion != "Todas" and fila is not None:
             fig_map.add_trace(
                 go.Scattermapbox(
-                    lat=[fila["lat"]],
-                    lon=[fila["lon"]],
+                    lat=[float(fila["lat"])],
+                    lon=[float(fila["lon"])],
                     mode="markers",
                     marker=go.scattermapbox.Marker(
                         size=tamanio_puntos + 15,
@@ -268,9 +267,6 @@ def show_mapa_estaciones(df: pd.DataFrame):
         else:
             st.info("No hay datos suficientes para generar el gráfico de disponibilidad.")
 
-    # =========================
-    # INFORMACIÓN DE ESTACIÓN
-    # =========================
     if seleccion != "Todas" and fila is not None:
         st.markdown("## Información de la estación seleccionada")
 
