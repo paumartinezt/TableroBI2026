@@ -9,4 +9,4 @@ import streamlit as st
 
 df = cargar_estaciones()
 
-st.write(df.head())
+st.write(df)
