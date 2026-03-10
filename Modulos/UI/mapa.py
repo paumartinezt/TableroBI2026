@@ -5,6 +5,7 @@ import pandas as pd
 
 def show_mapa_estaciones(df: pd.DataFrame):
     st.subheader("Mapa de estaciones Ecobici en CDMX")
+    st.caption("Versión con slider")
 
     columnas_necesarias = ["station_id", "name", "lat", "lon"]
     for col in columnas_necesarias:
@@ -23,12 +24,7 @@ def show_mapa_estaciones(df: pd.DataFrame):
         index=0
     )
 
-    nivel_zoom = st.slider(
-        "Acercamiento del mapa",
-        min_value=1,
-        max_value=4,
-        value=1
-    )
+    nivel_zoom = st.slider("Acercamiento del mapa", 1, 4, 1)
 
     zoom_map = {
         1: 10.3,
@@ -40,15 +36,15 @@ def show_mapa_estaciones(df: pd.DataFrame):
     centroide_lat = df_mapa["lat"].mean()
     centroide_lon = df_mapa["lon"].mean()
 
+    estacion_info = None
+
     if estacion_seleccionada == "Ninguna":
         centro_lat = centroide_lat
         centro_lon = centroide_lon
         zoom_actual = zoom_map[1]
-        estacion_info = None
     else:
         estacion_info = df_mapa[df_mapa["opcion"] == estacion_seleccionada].iloc[0]
 
-        # Nivel 1 = vista general
         if nivel_zoom == 1:
             centro_lat = centroide_lat
             centro_lon = centroide_lon
@@ -60,14 +56,13 @@ def show_mapa_estaciones(df: pd.DataFrame):
 
     fig = go.Figure()
 
-    # Capa base: todas las estaciones
     fig.add_trace(
         go.Scattermapbox(
             lat=df_mapa["lat"],
             lon=df_mapa["lon"],
             mode="markers",
             marker=go.scattermapbox.Marker(
-                size=8,
+                size=9,
                 color="#CBB89D",
                 opacity=0.45
             ),
@@ -78,7 +73,6 @@ def show_mapa_estaciones(df: pd.DataFrame):
         )
     )
 
-    # Capa superior: estación seleccionada
     if estacion_info is not None:
         fig.add_trace(
             go.Scattermapbox(
@@ -86,7 +80,7 @@ def show_mapa_estaciones(df: pd.DataFrame):
                 lon=[estacion_info["lon"]],
                 mode="markers",
                 marker=go.scattermapbox.Marker(
-                    size=20,
+                    size=24,
                     color="#9C5B2E",
                     opacity=1.0
                 ),
@@ -104,26 +98,14 @@ def show_mapa_estaciones(df: pd.DataFrame):
             zoom=zoom_actual
         ),
         margin={"r": 0, "t": 0, "l": 0, "b": 0},
-        height=650,
-        legend=dict(
-            orientation="v",
-            yanchor="top",
-            y=1,
-            xanchor="left",
-            x=0.01
-        )
+        height=650
     )
 
     st.plotly_chart(fig, use_container_width=True)
 
     if estacion_info is not None:
         st.markdown("### Información de la estación seleccionada")
-        col1, col2 = st.columns(2)
-
-        with col1:
-            st.write(f"**ID:** {estacion_info['station_id']}")
-            st.write(f"**Nombre:** {estacion_info['name']}")
-
-        with col2:
-            st.write(f"**Latitud:** {estacion_info['lat']}")
-            st.write(f"**Longitud:** {estacion_info['lon']}")
+        st.write(f"**ID:** {estacion_info['station_id']}")
+        st.write(f"**Nombre:** {estacion_info['name']}")
+        st.write(f"**Latitud:** {estacion_info['lat']}")
+        st.write(f"**Longitud:** {estacion_info['lon']}")
