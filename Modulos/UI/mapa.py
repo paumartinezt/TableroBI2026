@@ -25,59 +25,82 @@ def render_bike_icons(
     bicis_danadas=0,
     puertos_disponibles=0,
     puertos_danados=0,
-    max_icons=10
+    scale=100
 ):
     st.markdown("### Disponibilidad: CDMX")
 
-    def bike_svg(color):
-        return f"""
-        <svg width="22" height="22" viewBox="0 0 24 24"
-             xmlns="http://www.w3.org/2000/svg"
-             style="margin-right:4px; vertical-align:middle;">
-            <g fill="{color}">
-                <circle cx="5.5" cy="17" r="3.2"/>
-                <circle cx="18.5" cy="17" r="3.2"/>
-                <circle cx="12" cy="7" r="1.6"/>
-                <path d="M11 9.2h3l2.2 3.6h1.3v1.5h-2.1l-1.8-3h-1.9l-1.7 2.8H8.7l2.3-4.9z"/>
-                <path d="M8.9 14.1H14v1.4H8.9z"/>
-            </g>
-        </svg>
+    verdes = int(bicis_disponibles / scale) if bicis_disponibles > 0 else 0
+    rojas = int(bicis_danadas / scale) if bicis_danadas > 0 else 0
+    azules = int(puertos_disponibles / scale) if puertos_disponibles > 0 else 0
+    naranjas = int(puertos_danados / scale) if puertos_danados > 0 else 0
+
+    icons = []
+    colors = []
+
+    icons += ["🚲"] * verdes
+    colors += ["#49A96E"] * verdes
+
+    icons += ["🚲"] * rojas
+    colors += ["#E45757"] * rojas
+
+    icons += ["🚲"] * azules
+    colors += ["#4A90E2"] * azules
+
+    icons += ["🚲"] * naranjas
+    colors += ["#F5A623"] * naranjas
+
+    if len(icons) == 0:
+        st.write("Sin datos de disponibilidad")
+        return
+
+    x = []
+    y = []
+
+    columnas = 10
+    for i in range(len(icons)):
+        x.append(i % columnas)
+        y.append(-(i // columnas))
+
+    fig = go.Figure()
+
+    fig.add_trace(
+        go.Scatter(
+            x=x,
+            y=y,
+            mode="text",
+            text=icons,
+            textfont=dict(
+                size=24,
+                color=colors
+            ),
+            hoverinfo="skip",
+            showlegend=False
+        )
+    )
+
+    fig.update_layout(
+        height=280,
+        margin=dict(l=0, r=0, t=0, b=0),
+        xaxis=dict(visible=False),
+        yaxis=dict(visible=False),
+        plot_bgcolor="white",
+        paper_bgcolor="white"
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
+
+    st.markdown(
         """
-
-    categorias = [
-        ("Bici disponible", bicis_disponibles, "#49A96E"),
-        ("Bici dañada", bicis_danadas, "#E45757"),
-        ("Puerto disponible", puertos_disponibles, "#4A90E2"),
-        ("Puerto dañado", puertos_danados, "#F5A623"),
-    ]
-
-    for nombre, cantidad, color in categorias:
-        if cantidad is None:
-            cantidad = 0
-
-        cantidad = int(cantidad)
-        iconos_mostrar = min(cantidad, max_icons)
-        restante = cantidad - iconos_mostrar
-
-        bicicletas = ""
-        for _ in range(iconos_mostrar):
-            bicicletas += bike_svg(color)
-
-        extra = ""
-        if restante > 0:
-            extra = f"<span style='color:{color}; font-size:16px; font-weight:600; margin-left:8px;'>+ {restante}</span>"
-
-        html = f"""
-        <div style="margin-bottom:16px;">
-            <div style="font-size:14px; margin-bottom:6px;"><b>{nombre}</b></div>
-            <div style="display:flex; flex-wrap:wrap; align-items:center;">
-                {bicicletas}
-                {extra}
-            </div>
+        <div style="font-size:14px; line-height:1.8;">
+            <span style="color:#49A96E;">🚲</span> Bici disponible<br>
+            <span style="color:#E45757;">🚲</span> Bici dañada<br>
+            <span style="color:#4A90E2;">🚲</span> Puerto disponible<br>
+            <span style="color:#F5A623;">🚲</span> Puerto dañado<br><br>
+            <span style="color:gray;">Escala: 1 bici ≈ 100 unidades</span>
         </div>
-        """
-
-        st.markdown(html, unsafe_allow_html=True)
+        """,
+        unsafe_allow_html=True
+    )
 
 
 def show_mapa_estaciones(df: pd.DataFrame):
@@ -95,6 +118,7 @@ def show_mapa_estaciones(df: pd.DataFrame):
     else:
         df["estado_estacion"] = "Sin clasificar"
 
+    # SIDEBAR
     st.sidebar.markdown("## Configuración de Visualización")
 
     estaciones = ["Todas"] + sorted(df["name"].unique().tolist())
@@ -242,7 +266,7 @@ def show_mapa_estaciones(df: pd.DataFrame):
             bicis_danadas=total_disabled,
             puertos_disponibles=total_docks,
             puertos_danados=total_docks_disabled,
-            max_icons=10
+            scale=100
         )
 
     if punto is not None:
