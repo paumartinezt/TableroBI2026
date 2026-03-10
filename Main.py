@@ -5,8 +5,8 @@ from Modulos.UI.header import show_header
 show_header("Mi primera GUI en Streamlit")
 
 from Modulos.data.Ecobiciservice import cargar_estaciones
-import streamlit as st
+from Modulos.UI.mapa import show_mapa_estaciones
 
 df = cargar_estaciones()
 
-st.write(df)
+show_mapa_estaciones(df)
