@@ -10,4 +10,4 @@ def show_header(text_title: str):
     with col2:
         st.title(text_title)
         st.caption("📘 Developed for: *Business Intelligence (Graduate Level)*")
-        st.caption("Instructor: Edgar Avalos-Gauna (2025), Universidad Panamericana")
+        st.caption("Instructor: Edgar Avalos-Gauna (2026), Universidad Panamericana")
