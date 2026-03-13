@@ -22,54 +22,12 @@ def clasificar_estacion(row):
         return "Puertos disponibles"
 
 
-def show_metric_card(label, value):
-    html = f"""
-    <div style="
-        background-color:#f7f7f9;
-        padding:16px 18px;
-        border-radius:14px;
-        border:1px solid #ececf2;
-        margin-bottom:8px;
-    ">
-        <div style="font-size:13px; color:#6b7280; margin-bottom:6px;">{label}</div>
-        <div style="font-size:28px; font-weight:700; color:#22223b;">{value}</div>
-    </div>
-    """
-    st.markdown(html, unsafe_allow_html=True)
-
-
-def show_info_card(title, items):
-    bloques = ""
-    for k, v in items:
-        bloques += f"""
-        <div style="margin-bottom:10px;">
-            <div style="color:#6b7280; font-size:13px;">{k}</div>
-            <div style="color:#22223b; font-size:15px; font-weight:600;">{v}</div>
-        </div>
-        """
-
-    html = f"""
-    <div style="
-        background-color:#ffffff;
-        padding:18px;
-        border-radius:14px;
-        border:1px solid #ececf2;
-        margin-top:10px;
-        margin-bottom:10px;
-        box-shadow:0 1px 2px rgba(0,0,0,0.05);
-    ">
-        <div style="
-            font-size:18px;
-            font-weight:700;
-            color:#22223b;
-            margin-bottom:14px;
-        ">
-            {title}
-        </div>
-        {bloques}
-    </div>
-    """
-    st.markdown(html, unsafe_allow_html=True)
+def show_section_card(title, items):
+    with st.container(border=True):
+        st.markdown(f"**{title}**")
+        for label, value in items:
+            st.caption(label)
+            st.write(value)
 
 
 def show_mapa_estaciones(df: pd.DataFrame):
@@ -94,6 +52,9 @@ def show_mapa_estaciones(df: pd.DataFrame):
 
     df["estado_estacion"] = df.apply(clasificar_estacion, axis=1)
 
+    # =========================
+    # SIDEBAR
+    # =========================
     st.sidebar.markdown("## Configuración de Visualización")
 
     estaciones = ["Todas"] + sorted(df["name"].unique().tolist())
@@ -116,18 +77,18 @@ def show_mapa_estaciones(df: pd.DataFrame):
         default=estados_disponibles
     )
 
-    # Guardar original
+    # =========================
+    # DATAFRAME ORIGINAL Y FILTRO
+    # =========================
     df_original = df.copy()
 
-    # Buscar la estación seleccionada en el original
     fila = None
     if seleccion != "Todas" and seleccion in df_original["name"].values:
         fila = df_original[df_original["name"] == seleccion].iloc[0]
 
-    # Aplicar filtro visual
     df = df_original[df_original["estado_estacion"].isin(filtro_estados)].copy()
 
-    # Si hay estación seleccionada y quedó fuera del filtro, volverla a agregar para que se resalte
+    # Si la estación seleccionada no quedó en el filtro, la volvemos a agregar
     if fila is not None and fila["name"] not in df["name"].values:
         df = pd.concat([df, fila.to_frame().T], ignore_index=True)
         st.info("La estación seleccionada quedó fuera del filtro de estado, pero se mantiene visible como referencia.")
@@ -136,9 +97,15 @@ def show_mapa_estaciones(df: pd.DataFrame):
         st.warning("No hay datos disponibles con los filtros seleccionados.")
         return
 
-    lat_centroide = df["lat"].astype(float).mean()
-    lon_centroide = df["lon"].astype(float).mean()
+    df["lat"] = pd.to_numeric(df["lat"], errors="coerce")
+    df["lon"] = pd.to_numeric(df["lon"], errors="coerce")
 
+    lat_centroide = df["lat"].mean()
+    lon_centroide = df["lon"].mean()
+
+    # =========================
+    # LÓGICA DE SELECCIÓN Y WAFFLE
+    # =========================
     if seleccion != "Todas" and fila is not None:
         valores_waffle = fila[columnas_status].fillna(0).astype(int).values
 
@@ -167,6 +134,9 @@ def show_mapa_estaciones(df: pd.DataFrame):
         df["resaltado"] = "Normal"
         seleccion = "Todas"
 
+    # =========================
+    # KPIs
+    # =========================
     total_estaciones = df["station_id"].nunique()
     total_bikes = int(df["num_bikes_available"].sum())
     total_docks = int(df["num_docks_available"].sum())
@@ -174,14 +144,17 @@ def show_mapa_estaciones(df: pd.DataFrame):
 
     k1, k2, k3, k4 = st.columns(4)
     with k1:
-        show_metric_card("Estaciones visibles", total_estaciones)
+        st.metric("Estaciones visibles", total_estaciones)
     with k2:
-        show_metric_card("Bicis disponibles", total_bikes)
+        st.metric("Bicis disponibles", total_bikes)
     with k3:
-        show_metric_card("Puertos disponibles", total_docks)
+        st.metric("Puertos disponibles", total_docks)
     with k4:
-        show_metric_card("Estaciones sin bicis", estaciones_sin_bicis)
+        st.metric("Estaciones sin bicis", estaciones_sin_bicis)
 
+    # =========================
+    # HOVER DEL MAPA
+    # =========================
     df["hover_texto"] = (
         "<b>" + df["name"].astype(str) + "</b><br>"
         + "ID: " + df["station_id"].astype(str) + "<br>"
@@ -192,6 +165,9 @@ def show_mapa_estaciones(df: pd.DataFrame):
         + "Puertos dañados: " + df["num_docks_disabled"].astype(str)
     )
 
+    # =========================
+    # LAYOUT PRINCIPAL
+    # =========================
     col_mapa, col_waffle = st.columns([2.4, 1], gap="large")
 
     with col_mapa:
@@ -276,13 +252,16 @@ def show_mapa_estaciones(df: pd.DataFrame):
         else:
             st.info("No hay datos suficientes para generar el gráfico de disponibilidad.")
 
+    # =========================
+    # INFORMACIÓN DE ESTACIÓN
+    # =========================
     if seleccion != "Todas" and fila is not None:
         st.markdown("## Información de la estación seleccionada")
 
         c1, c2 = st.columns(2)
 
         with c1:
-            show_info_card(
+            show_section_card(
                 "Datos generales",
                 [
                     ("ID", fila["station_id"]),
@@ -292,7 +271,7 @@ def show_mapa_estaciones(df: pd.DataFrame):
             )
 
         with c2:
-            show_info_card(
+            show_section_card(
                 "Estado operativo",
                 [
                     ("Latitud", fila["lat"]),
