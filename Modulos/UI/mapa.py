@@ -23,24 +23,31 @@ def clasificar_estacion(row):
 
 
 def show_metric_card(label, value):
-    st.markdown(
-        f"""
-        <div style="
-            background-color:#f7f7f9;
-            padding:16px 18px;
-            border-radius:14px;
-            border:1px solid #ececf2;
-            margin-bottom:8px;
-        ">
-            <div style="font-size:13px; color:#6b7280; margin-bottom:6px;">{label}</div>
-            <div style="font-size:28px; font-weight:700; color:#22223b;">{value}</div>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
+    html = f"""
+    <div style="
+        background-color:#f7f7f9;
+        padding:16px 18px;
+        border-radius:14px;
+        border:1px solid #ececf2;
+        margin-bottom:8px;
+    ">
+        <div style="font-size:13px; color:#6b7280; margin-bottom:6px;">{label}</div>
+        <div style="font-size:28px; font-weight:700; color:#22223b;">{value}</div>
+    </div>
+    """
+    st.markdown(html, unsafe_allow_html=True)
 
 
 def show_info_card(title, items):
+    bloques = ""
+    for k, v in items:
+        bloques += f"""
+        <div style="margin-bottom:10px;">
+            <div style="color:#6b7280; font-size:13px;">{k}</div>
+            <div style="color:#22223b; font-size:15px; font-weight:600;">{v}</div>
+        </div>
+        """
+
     html = f"""
     <div style="
         background-color:#ffffff;
@@ -49,17 +56,19 @@ def show_info_card(title, items):
         border:1px solid #ececf2;
         margin-top:10px;
         margin-bottom:10px;
+        box-shadow:0 1px 2px rgba(0,0,0,0.05);
     ">
-        <div style="font-size:18px; font-weight:700; color:#22223b; margin-bottom:12px;">{title}</div>
-    """
-    for k, v in items:
-        html += f"""
-        <div style="margin-bottom:8px;">
-            <span style="color:#6b7280; font-size:13px;">{k}</span><br>
-            <span style="color:#22223b; font-size:15px; font-weight:600;">{v}</span>
+        <div style="
+            font-size:18px;
+            font-weight:700;
+            color:#22223b;
+            margin-bottom:14px;
+        ">
+            {title}
         </div>
-        """
-    html += "</div>"
+        {bloques}
+    </div>
+    """
     st.markdown(html, unsafe_allow_html=True)
 
 
